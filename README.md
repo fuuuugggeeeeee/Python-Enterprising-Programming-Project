@@ -1,4 +1,4 @@
-# Enterprise Software Systems - ITEPA Assignment
+# Enterprise Software Systems
 
 ## Project Overview
 A comprehensive demonstration of enterprise-grade software development principles including concurrent programming, design patterns, and microservices architecture.
