@@ -3,9 +3,12 @@ __pycache__/
 *.egg-info/
 .coverage
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
 venv/
 build/
 dist/
-students.json
+enterprise.db
+.env
 .DS_Store

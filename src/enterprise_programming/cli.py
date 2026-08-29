@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 from typing import List, Optional
 
 from .sensor import generate_readings, process_readings
-from .students import create_student_server
 from .tasks import ConsoleObserver, TaskManager, TaskPriority, TaskStatus
 
 
@@ -57,28 +55,12 @@ def _task_demo(args: argparse.Namespace) -> int:
     manager.update_status(implementation.task_id, TaskStatus.IN_PROGRESS)
     manager.update_status(implementation.task_id, TaskStatus.DONE)
     manager.update_status(documentation.task_id, TaskStatus.IN_PROGRESS)
-    print("{} tasks tracked; {} completed".format(
-        len(manager.list_tasks()),
-        len(manager.list_tasks(TaskStatus.DONE)),
-    ))
-    return 0
-
-
-def _student_api(args: argparse.Namespace) -> int:
-    server = create_student_server(
-        host=args.host,
-        port=args.port,
-        data_path=args.data,
+    print(
+        "{} tasks tracked; {} completed".format(
+            len(manager.list_tasks()),
+            len(manager.list_tasks(TaskStatus.DONE)),
+        )
     )
-    host, port = server.server_address[:2]
-    print("Student API listening on http://{}:{}".format(host, port))
-    print("Data file: {}".format(args.data))
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopping student API")
-    finally:
-        server.server_close()
     return 0
 
 
@@ -99,11 +81,6 @@ def build_parser() -> argparse.ArgumentParser:
     tasks = subparsers.add_parser("task-demo", help="run the task workflow")
     tasks.set_defaults(handler=_task_demo)
 
-    students = subparsers.add_parser("student-api", help="start the student HTTP API")
-    students.add_argument("--host", default="127.0.0.1")
-    students.add_argument("--port", type=int, default=8000)
-    students.add_argument("--data", type=Path, default=Path("students.json"))
-    students.set_defaults(handler=_student_api)
     return parser
 
 

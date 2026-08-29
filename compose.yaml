@@ -1,0 +1,36 @@
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: enterprise
+      POSTGRES_USER: enterprise
+      POSTGRES_PASSWORD: ${EPP_DB_PASSWORD:?Set EPP_DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enterprise -d enterprise"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    environment:
+      EPP_ENVIRONMENT: production
+      EPP_DATABASE_URL: postgresql+psycopg://enterprise:${EPP_DB_PASSWORD}@database:5432/enterprise
+      EPP_JWT_SECRET: ${EPP_JWT_SECRET:?Set EPP_JWT_SECRET in .env}
+      EPP_BOOTSTRAP_ADMIN_USERNAME: ${EPP_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      EPP_BOOTSTRAP_ADMIN_PASSWORD: ${EPP_BOOTSTRAP_ADMIN_PASSWORD:?Set admin password in .env}
+      EPP_ALLOWED_ORIGINS: ${EPP_ALLOWED_ORIGINS:-[]}
+      EPP_JSON_LOGS: "true"
+      EPP_RATE_LIMIT_PER_MINUTE: ${EPP_RATE_LIMIT_PER_MINUTE:-120}
+    ports:
+      - "8000:8000"
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

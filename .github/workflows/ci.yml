@@ -7,26 +7,113 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
 jobs:
-  test:
+  quality:
+    name: Quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip setuptools
+      - run: python -m pip install --editable ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy src
+      - run: uv lock --check
+      - run: pip-audit --skip-editable
+      - name: Verify migrations match models
+        env:
+          EPP_ENVIRONMENT: test
+          EPP_DATABASE_URL: sqlite+pysqlite:///./migration-check.db
+        run: |
+          alembic upgrade head
+          alembic check
+
+  tests:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.11", "3.13"]
-
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install package
-        run: python -m pip install --editable .
-      - name: Compile package
-        run: python -m compileall -q src
-      - name: Run tests
-        run: python -m unittest discover -s tests -v
-      - name: Smoke-test demos
+          cache: pip
+      - run: python -m pip install --editable ".[dev]"
+      - run: pytest -m "not integration"
+      - name: Smoke-test console applications
         run: |
           enterprise-project sensor-demo --sensors 2 --readings 5 --workers 2
           enterprise-project task-demo
+          enterprise-api --help
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --editable ".[dev]"
+      - run: pytest -m "not integration" --cov --cov-report=term-missing --cov-fail-under=90
+
+  postgres:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: enterprise_test
+          POSTGRES_USER: enterprise
+          POSTGRES_PASSWORD: enterprise_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U enterprise -d enterprise_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      EPP_ENVIRONMENT: test
+      EPP_DATABASE_URL: postgresql+psycopg://enterprise:enterprise_test_password@localhost:5432/enterprise_test
+      EPP_TEST_POSTGRES_URL: postgresql+psycopg://enterprise:enterprise_test_password@localhost:5432/enterprise_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --editable ".[dev]"
+      - run: alembic upgrade head
+      - run: alembic check
+      - run: pytest -m integration -v
+
+  container:
+    name: Container build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: enterprise-programming-project:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

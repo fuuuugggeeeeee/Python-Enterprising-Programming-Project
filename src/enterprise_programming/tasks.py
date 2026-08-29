@@ -175,6 +175,8 @@ class TaskManager:
 
     _instance: Optional["TaskManager"] = None
     _instance_lock = threading.Lock()
+    _tasks: Dict[str, Task]
+    _lock: threading.RLock
 
     def __new__(cls) -> "TaskManager":
         with cls._instance_lock:
